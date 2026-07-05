@@ -1,8 +1,11 @@
-import { Disclaimer } from "@/components/Disclaimer";
-import { ErrorFallback } from "@/components/ErrorFallback";
-import { FactorsPanel } from "@/components/FactorsPanel";
-import { IssueList } from "@/components/IssueList";
-import { LastUpdated } from "@/components/LastUpdated";
+import { redirect } from "next/navigation";
+import { COMPANIES, DEFAULT_TICKER } from "@/lib/config";
+
+export default function RootPage() {
+  const company = COMPANIES.find((c) => c.ticker === DEFAULT_TICKER)!;
+  redirect(`/${company.slug}`);
+}
+} from "@/components/LastUpdated";
 import { SentimentGauge } from "@/components/SentimentGauge";
 import { getMuNewsDigest } from "@/lib/digest";
 import { DEFAULT_DISCLAIMER } from "@/lib/config";

@@ -3,10 +3,11 @@ import {
   FALLBACK_WINDOW_HOURS,
   FEED_FETCH_TIMEOUT_MS,
   FRESH_WINDOW_HOURS,
+  getRssSources,
   MAX_ITEMS,
   MIN_ITEMS_BEFORE_WIDENING,
   REVALIDATE_SECONDS,
-  RSS_SOURCES,
+  type Company,
   type RssSource,
 } from "./config";
 import type { NewsItem } from "./types";
@@ -37,19 +38,19 @@ function parsePubDate(raw: unknown): string | null {
   return parsed.toISOString();
 }
 
-async function fetchFeed(source: RssSource): Promise<NewsItem[]> {
+async function fetchFeed(source: RssSource, ticker: string): Promise<NewsItem[]> {
   try {
     const res = await fetch(source.url, {
       next: { revalidate: REVALIDATE_SECONDS },
       signal: AbortSignal.timeout(FEED_FETCH_TIMEOUT_MS),
       headers: {
         Accept: "application/rss+xml, application/xml, text/xml, */*",
-        "User-Agent": "Mozilla/5.0 (compatible; MuNewsDashboard/1.0)",
+        "User-Agent": "Mozilla/5.0 (compatible; NewsDashboard/1.0)",
       },
     });
 
     if (!res.ok) {
-      console.error(`[rss] ${source.name} responded with ${res.status}`);
+      console.error(`[rss] ${ticker} ${source.name} responded with ${res.status}`);
       return [];
     }
 
@@ -75,7 +76,7 @@ async function fetchFeed(source: RssSource): Promise<NewsItem[]> {
       })
       .filter((item): item is NewsItem => item !== null);
   } catch (err) {
-    console.error(`[rss] Failed to fetch/parse ${source.name}:`, (err as Error).message);
+    console.error(`[rss] ${ticker} failed to fetch/parse ${source.name}:`, (err as Error).message);
     return [];
   }
 }
@@ -104,8 +105,11 @@ function withinHours(item: NewsItem, hours: number, now: number): boolean {
   return ageMs >= 0 && ageMs <= hours * 60 * 60 * 1000;
 }
 
-export async function fetchAllFeeds(): Promise<NewsItem[]> {
-  const results = await Promise.allSettled(RSS_SOURCES.map(fetchFeed));
+export async function fetchAllFeeds(company: Company): Promise<NewsItem[]> {
+  const sources = getRssSources(company);
+  const results = await Promise.allSettled(
+    sources.map((source) => fetchFeed(source, company.ticker))
+  );
 
   const allItems = results.flatMap((result) =>
     result.status === "fulfilled" ? result.value : []

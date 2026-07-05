@@ -2,7 +2,7 @@
   "name": "mu-news-dashboard",
   "version": "0.1.0",
   "private": true,
-  "description": "Micron Technology(MU) 관련 뉴스를 매일 자동 수집하고 Claude API로 요약·투자 심리 분석을 제공하는 대시보드",
+  "description": "Micron(MU), Intel(INTC), SanDisk(SNDK), AST SpaceMobile(ASTS), Marvell(MRVL), Coherent(COHR) 등 종목별 뉴스를 매일 자동 수집하고 Claude API로 요약·투자 심리 분석을 제공하는 대시보드",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -17,9 +17,9 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MU 뉴스 대시보드 | Micron Technology 뉴스 요약·투자 심리 분석",
+  title: "종목 뉴스 대시보드 | 뉴스 요약·투자 심리 분석",
   description:
-    "Micron Technology(MU) 관련 뉴스를 매일 자동 수집하고 AI로 요약·투자 심리를 분석하는 대시보드입니다. 투자 자문이 아닌 참고용 뉴스 요약 서비스입니다.",
+    "관심 종목 관련 뉴스를 매일 자동 수집하고 AI로 요약·투자 심리를 분석하는 대시보드입니다. 투자 자문이 아닌 참고용 뉴스 요약 서비스입니다.",
 };
 
 export default function RootLayout({
@@ -30,6 +30,10 @@ export default function RootLayout({
   return (
     <html lang="ko" className={`${sans.variable} ${mono.variable}`}>
       <body className="min-h-screen font-sans antialiased">{children}</body>
+    </html>
+  );
+}
+y>
     </html>
   );
 }

@@ -1,14 +1,18 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { CLAUDE_MODEL, CLAUDE_TIMEOUT_MS, DEFAULT_DISCLAIMER } from "./config";
+import { CLAUDE_MODEL, CLAUDE_TIMEOUT_MS, getDefaultDisclaimer, type Company } from "./config";
 import type { Digest, DigestFailure, DigestResult, NewsItem } from "./types";
 
-const TOOL_NAME = "emit_mu_news_digest";
+const TOOL_NAME = "emit_news_digest";
 
-const DIGEST_TOOL: Anthropic.Tool = {
-  name: TOOL_NAME,
-  description:
-    "Micron Technology(MU) 뉴스 목록을 분석한 결과를 구조화된 형식으로 제출합니다.",
-  input_schema: {
+function buildDigestTool(company: Company): Anthropic.Tool {
+  return {
+    name: TOOL_NAME,
+    description: `${company.nameEn}(${company.ticker}) 뉴스 목록을 분석한 결과를 구조화된 형식으로 제출합니다.`,
+    input_schema: DIGEST_INPUT_SCHEMA,
+  };
+}
+
+const DIGEST_INPUT_SCHEMA: Anthropic.Tool.InputSchema = {
     type: "object",
     properties: {
       summary: {
@@ -48,11 +52,10 @@ const DIGEST_TOOL: Anthropic.Tool = {
         description: "투자 자문이 아니라는 면책 문구 (한국어).",
       },
     },
-    required: ["summary", "keyIssues", "tone", "factors", "disclaimer"],
-  },
+  required: ["summary", "keyIssues", "tone", "factors", "disclaimer"],
 };
 
-function buildPrompt(items: NewsItem[]): string {
+function buildPrompt(items: NewsItem[], company: Company): string {
   const list = items
     .map(
       (item, i) =>
@@ -60,14 +63,18 @@ function buildPrompt(items: NewsItem[]): string {
     )
     .join("\n");
 
-  return `다음은 최근 24~48시간 이내에 수집된 Micron Technology(MU) 관련 뉴스 목록입니다.\n\n${list}\n\n이 뉴스 목록을 바탕으로 ${TOOL_NAME} 도구를 사용해 분석 결과를 제출하세요. keyIssues의 link는 반드시 위 목록에 있는 link 값을 그대로 사용하세요. disclaimer에는 "이 내용은 투자 자문이 아니며 참고용 뉴스 요약입니다"라는 취지의 문구를 반드시 포함하세요.`;
+  return `다음은 최근 24~48시간 이내에 수집된 ${company.nameEn}(${company.ticker}) 관련 뉴스 목록입니다.\n\n${list}\n\n이 뉴스 목록을 바탕으로 ${TOOL_NAME} 도구를 사용해 분석 결과를 제출하세요. keyIssues의 link는 반드시 위 목록에 있는 link 값을 그대로 사용하세요. disclaimer에는 "이 내용은 투자 자문이 아니며 참고용 뉴스 요약입니다"라는 취지의 문구를 반드시 포함하세요.`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function parseDigestInput(input: unknown, newsItems: NewsItem[]): DigestResult | null {
+function parseDigestInput(
+  input: unknown,
+  newsItems: NewsItem[],
+  company: Company
+): DigestResult | null {
   if (!isRecord(input)) return null;
 
   const summary = typeof input.summary === "string" ? input.summary : null;
@@ -96,10 +103,11 @@ function parseDigestInput(input: unknown, newsItems: NewsItem[]): DigestResult |
 
   if (keyIssues.length === 0) return null;
 
+  const defaultDisclaimer = getDefaultDisclaimer(company);
   const disclaimer =
     typeof input.disclaimer === "string" && input.disclaimer.trim()
       ? input.disclaimer
-      : DEFAULT_DISCLAIMER;
+      : defaultDisclaimer;
 
   return {
     ok: true,
@@ -108,13 +116,13 @@ function parseDigestInput(input: unknown, newsItems: NewsItem[]): DigestResult |
     tone: { label, score: Math.max(0, Math.min(100, score)), reasoning },
     factors,
     // 모델이 면책 문구를 생략/변형하더라도 항상 고정 문구가 함께 노출되도록 보장.
-    disclaimer: `${disclaimer}\n\n${DEFAULT_DISCLAIMER}`.trim(),
+    disclaimer: `${disclaimer}\n\n${defaultDisclaimer}`.trim(),
     newsItems,
     generatedAt: new Date().toISOString(),
   };
 }
 
-export async function summarizeNews(newsItems: NewsItem[]): Promise<Digest> {
+export async function summarizeNews(newsItems: NewsItem[], company: Company): Promise<Digest> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
@@ -129,7 +137,7 @@ export async function summarizeNews(newsItems: NewsItem[]): Promise<Digest> {
   if (newsItems.length === 0) {
     return {
       ok: false,
-      error: "최근 24~48시간 이내에 수집된 MU 관련 뉴스가 없습니다.",
+      error: `최근 24~48시간 이내에 수집된 ${company.nameEn}(${company.ticker}) 관련 뉴스가 없습니다.`,
       newsItems,
       generatedAt: new Date().toISOString(),
     } satisfies DigestFailure;
@@ -141,9 +149,9 @@ export async function summarizeNews(newsItems: NewsItem[]): Promise<Digest> {
     const message = await client.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 2048,
-      tools: [DIGEST_TOOL],
+      tools: [buildDigestTool(company)],
       tool_choice: { type: "tool", name: TOOL_NAME },
-      messages: [{ role: "user", content: buildPrompt(newsItems) }],
+      messages: [{ role: "user", content: buildPrompt(newsItems, company) }],
     });
 
     const toolUseBlock = message.content.find(
@@ -154,7 +162,7 @@ export async function summarizeNews(newsItems: NewsItem[]): Promise<Digest> {
       throw new Error("Claude 응답에서 tool_use 블록을 찾을 수 없습니다.");
     }
 
-    const parsed = parseDigestInput(toolUseBlock.input, newsItems);
+    const parsed = parseDigestInput(toolUseBlock.input, newsItems, company);
     if (!parsed) {
       throw new Error("Claude 응답 형식이 예상 스키마와 일치하지 않습니다.");
     }
