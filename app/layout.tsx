@@ -33,7 +33,3 @@ export default function RootLayout({
     </html>
   );
 }
-y>
-    </html>
-  );
-}
