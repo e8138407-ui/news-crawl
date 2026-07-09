@@ -21,7 +21,8 @@ const DIGEST_INPUT_SCHEMA: Anthropic.Tool.InputSchema = {
       },
       keyIssues: {
         type: "array",
-        description: "주요 이슈 3~5개.",
+        description:
+          "주요 이슈 0~5개. 눈에 띄는 주요 이슈가 없으면(예: 반복적인 지분 변동 공시 등 형식적인 기사뿐인 경우) 빈 배열([])을 반환해도 됩니다.",
         items: {
           type: "object",
           properties: {
@@ -63,7 +64,7 @@ function buildPrompt(items: NewsItem[], company: Company): string {
     )
     .join("\n");
 
-  return `다음은 최근 24~48시간 이내에 수집된 ${company.nameEn}(${company.ticker}) 관련 뉴스 목록입니다.\n\n${list}\n\n이 뉴스 목록을 바탕으로 ${TOOL_NAME} 도구를 사용해 분석 결과를 제출하세요. keyIssues의 link는 반드시 위 목록에 있는 link 값을 그대로 사용하세요. disclaimer에는 "이 내용은 투자 자문이 아니며 참고용 뉴스 요약입니다"라는 취지의 문구를 반드시 포함하세요.`;
+  return `다음은 최근 24~48시간 이내에 수집된 ${company.nameEn}(${company.ticker}) 관련 뉴스 목록입니다.\n\n${list}\n\n이 뉴스 목록을 바탕으로 ${TOOL_NAME} 도구를 사용해 분석 결과를 제출하세요. keyIssues의 link는 반드시 위 목록에 있는 link 값을 그대로 사용하세요. 만약 대부분의 뉴스가 기관 지분 변동 공시처럼 반복적이고 형식적인 내용뿐이라 의미 있는 주요 이슈를 뽑기 어렵다면, keyIssues는 빈 배열로 반환하고 summary와 factors만 충실히 작성하세요 (억지로 이슈를 만들어내지 마세요). disclaimer에는 "이 내용은 투자 자문이 아니며 참고용 뉴스 요약입니다"라는 취지의 문구를 반드시 포함하세요.`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -101,7 +102,8 @@ function parseDigestInput(
     }))
     .filter((issue) => issue.title && issue.description && issue.link);
 
-  if (keyIssues.length === 0) return null;
+  // keyIssues가 비어 있는 것은 유효한 결과로 취급한다 (예: 형식적인 기사뿐이라 뽑을 만한
+  // 이슈가 없는 경우). summary/tone/factors만 있어도 화면에는 정상적으로 표시된다.
 
   const defaultDisclaimer = getDefaultDisclaimer(company);
   const disclaimer =

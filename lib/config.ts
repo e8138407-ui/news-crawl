@@ -54,6 +54,20 @@ export const COMPANIES: Company[] = [
     nameKo: "코히런트",
     googleNewsQuery: "Coherent+Corp+OR+COHR+stock",
   },
+  {
+    ticker: "AVGO",
+    slug: "avgo",
+    nameEn: "Broadcom Inc.",
+    nameKo: "브로드컴",
+    googleNewsQuery: "Broadcom+OR+AVGO+stock",
+  },
+  {
+    ticker: "TSM",
+    slug: "tsm",
+    nameEn: "Taiwan Semiconductor Manufacturing (TSMC)",
+    nameKo: "TSMC",
+    googleNewsQuery: "TSMC+OR+Taiwan+Semiconductor+OR+TSM+stock",
+  },
 ];
 
 export const DEFAULT_TICKER = "MU";
