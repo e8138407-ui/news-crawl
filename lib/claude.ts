@@ -145,38 +145,57 @@ export async function summarizeNews(newsItems: NewsItem[], company: Company): Pr
     } satisfies DigestFailure;
   }
 
-  try {
-    const client = new Anthropic({ apiKey, timeout: CLAUDE_TIMEOUT_MS });
+  const client = new Anthropic({ apiKey, timeout: CLAUDE_TIMEOUT_MS });
+  const MAX_ATTEMPTS = 2;
+  let lastError = "알 수 없는 오류";
 
-    const message = await client.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 2048,
-      tools: [buildDigestTool(company)],
-      tool_choice: { type: "tool", name: TOOL_NAME },
-      messages: [{ role: "user", content: buildPrompt(newsItems, company) }],
-    });
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const message = await client.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 2048,
+        tools: [buildDigestTool(company)],
+        tool_choice: { type: "tool", name: TOOL_NAME },
+        messages: [{ role: "user", content: buildPrompt(newsItems, company) }],
+      });
 
-    const toolUseBlock = message.content.find(
-      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
-    );
+      const toolUseBlock = message.content.find(
+        (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+      );
 
-    if (!toolUseBlock) {
-      throw new Error("Claude 응답에서 tool_use 블록을 찾을 수 없습니다.");
+      if (!toolUseBlock) {
+        lastError = "Claude 응답에서 tool_use 블록을 찾을 수 없습니다.";
+        console.error(`[claude] ${company.ticker} attempt ${attempt}: ${lastError}`);
+        continue;
+      }
+
+      const parsed = parseDigestInput(toolUseBlock.input, newsItems, company);
+      if (!parsed) {
+        lastError = "Claude 응답 형식이 예상 스키마와 일치하지 않습니다.";
+        console.error(
+          `[claude] ${company.ticker} attempt ${attempt}: ${lastError} raw=`,
+          JSON.stringify(toolUseBlock.input).slice(0, 500)
+        );
+        continue;
+      }
+
+      return parsed;
+    } catch (err) {
+      lastError = (err as Error).message;
+      // 인증/과금(401/403) 또는 잘못된 요청(400)은 재시도해도 결과가 같으므로 즉시 중단.
+      const status = (err as { status?: number }).status;
+      if (status === 400 || status === 401 || status === 403) {
+        console.error(`[claude] ${company.ticker} non-retryable error (${status}): ${lastError}`);
+        break;
+      }
+      console.error(`[claude] ${company.ticker} attempt ${attempt} failed:`, lastError);
     }
-
-    const parsed = parseDigestInput(toolUseBlock.input, newsItems, company);
-    if (!parsed) {
-      throw new Error("Claude 응답 형식이 예상 스키마와 일치하지 않습니다.");
-    }
-
-    return parsed;
-  } catch (err) {
-    console.error("[claude] summarizeNews failed:", (err as Error).message);
-    return {
-      ok: false,
-      error: `Claude API 호출에 실패했습니다: ${(err as Error).message}`,
-      newsItems,
-      generatedAt: new Date().toISOString(),
-    } satisfies DigestFailure;
   }
+
+  return {
+    ok: false,
+    error: `Claude API 호출에 실패했습니다: ${lastError}`,
+    newsItems,
+    generatedAt: new Date().toISOString(),
+  } satisfies DigestFailure;
 }
